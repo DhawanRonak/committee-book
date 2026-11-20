@@ -4,7 +4,7 @@
 
 > Independent concept prototype for a product-management case study. Not affiliated with any company; all data is made up.
 
-**Live demo:** _add your Vercel link here after deploying_  
+**Live demo:** _add your `pages.dev` link here after deploying_  
 **Product spec:** [PRD.md](PRD.md)
 
 ## The problem
@@ -29,10 +29,11 @@ Tests need Node 18 or later:
 node test/logic.test.mjs
 ```
 
-## Deploy
+## Deploy (Cloudflare Pages, free)
 
-1. On [vercel.com](https://vercel.com), choose **Add New → Project** and import this repository.
-2. Framework preset **Other**, no build command, no root directory. Deploy.
+1. In the [Cloudflare dashboard](https://dash.cloudflare.com), go to **Workers & Pages → Create → Pages → Connect to Git** and pick this repository.
+2. Build settings: framework preset **None**, build command `exit 0`, build output directory `/`. Save and deploy.
+3. You get a link like `committee-book.pages.dev`. Every push to `main` redeploys automatically.
 
 Then paste the live link at the top of this README.
 
