@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Committee Book: a shared ledger for savings circles</title>
+<link rel="stylesheet" href="base.css">
+<style>
+:root{--accent:#9a3412;--accent-soft:#fbe9dc}
+.layout{display:grid;grid-template-columns:400px 1fr;gap:18px;align-items:start}@media(max-width:860px){.layout{grid-template-columns:1fr}}
+.phone{margin:0}.scroll{height:680px;overflow:auto;padding:14px}
+.hero{background:var(--accent);color:#fff;border-radius:16px;padding:14px}.hero b{font-size:24px;display:block}.hero small{color:#f6d9c8}
+.bar{height:8px;background:rgba(255,255,255,.3);border-radius:9px;overflow:hidden;margin:8px 0 4px}.bar i{display:block;height:100%;background:#fff}
+.who{display:flex;gap:10px;align-items:center;padding:10px 2px;border-bottom:1px solid var(--line)}.who .av{width:34px;height:34px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-weight:700;flex:none}
+.who .act{margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}.who button{min-height:34px;padding:4px 10px}
+.tabs button{padding:8px 9px;font-size:14px}.note{background:var(--warn-soft);border:1px solid #efd9a8;border-radius:12px;padding:10px;margin:10px 0}
+.task{background:#fff;border:2px solid var(--accent);border-radius:12px;padding:12px}.seg{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+</style>
+</head>
+<body>
+<div class="concept">Concept prototype for a product case study. People and amounts are made up. No real money moves.</div>
+<div class="wrap">
+  <header class="top"><div><h1>Committee Book</h1><small>The WhatsApp-and-notebook savings circle, as a ledger everyone can see</small></div></header>
+  <div class="layout">
+    <div class="phone" id="phone"><div class="scroll" id="app"></div></div>
+    <div>
+      <div class="card">
+        <label for="viewer">Demo control: view the app as</label>
+        <select id="viewer"></select>
+        <p class="muted">Each member sees the same ledger but different actions.</p>
+      </div>
+      <div class="card">
+        <h3>Usability test</h3>
+        <p class="muted">Five tasks. The app switches to the right person for each task and checks success from the ledger.</p>
+        <div class="row"><input id="pid" placeholder="Participant code" maxlength="12"><button class="primary" id="startTest">Start test</button></div>
+        <div id="taskBox" class="task hidden" style="margin-top:10px"></div>
+        <div id="testDone" class="hidden" style="margin-top:10px"><table id="testTable"></table><div class="row" style="margin-top:8px"><button class="primary" id="dlTest">Download results (CSV)</button></div></div>
+      </div>
+      <div class="card"><div class="row"><h3 class="grow">Event log</h3><button class="ghost" id="resetData">Reset demo data</button></div><div class="log" id="log"></div></div>
+    </div>
+  </div>
+</div>
+<script src="logic.js"></script>
+<script>
+const C = Committee, $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const store = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
+const rupee = n => (n < 0 ? '−' : '') + '₹' + Math.abs(n).toLocaleString('en-IN');
+let s = C.seed(), me = 3, tab = 'round', events = [], test = null, toastTimer = null;
+const nm = id => C.member(s, id).name;
+function track(name, detail) { events.push({ t: Date.now(), name, detail: detail || '', as: nm(me) }); $('log').textContent = events.slice(-40).map(e => `${new Date(e.t).toLocaleTimeString('en-IN')}  ${e.as.padEnd(7)} ${e.name}  ${e.detail}`).join('\n'); $('log').scrollTop = 1e6; if (test) { test.taps++; checkTask(); } }
+function toast(msg, undo) { const old = $('toast'); if (old) old.remove(); clearTimeout(toastTimer); const t = document.createElement('div'); t.className = 'toast'; t.id = 'toast'; t.setAttribute('role', 'status'); t.innerHTML = `<span class="grow">${esc(msg)}</span>${undo ? '<button>Undo</button>' : ''}`; if (undo) t.querySelector('button').onclick = () => { undo(); t.remove(); }; $('phone').appendChild(t); toastTimer = setTimeout(() => t.remove(), 5000); }
+function sheet(html) { closeSheet(); const bg = document.createElement('div'); bg.className = 'sheet-bg'; bg.id = 'sheetBg'; bg.innerHTML = `<div class="sheet" role="dialog" aria-modal="true">${html}</div>`; bg.onclick = e => { if (e.target === bg) closeSheet(); }; $('phone').appendChild(bg); return bg; }
+function closeSheet() { const x = $('sheetBg'); if (x) x.remove(); }
+function apply(next, ev, detail, msg) { const prev = s; if (next === prev) return; s = next; track(ev, detail); closeSheet(); render(); toast(msg, () => { s = prev; track('undo', ev); render(); }); }
+const PILL = { confirmed: ['ok', 'Received'], paid: ['acc', 'Paid, awaiting confirmation'], pending: ['warn', 'Not paid yet'] };
+
+function render() {
+  const sum = C.summary(s), r = sum.round, total = Object.keys(r.pay).length, iReceive = r.receiver === me, mine = r.pay[me];
+  const swapsForMe = s.swaps.filter(w => w.status === 'pending' && w.to === me);
+  let h = `<div class="row"><b class="grow">${esc(s.name)}</b><span class="pill">You: ${esc(nm(me))}${me === s.organiser ? ' (organiser)' : ''}</span></div>
+    <div class="hero" style="margin-top:8px"><small>Month ${r.n} of ${s.members.length} · due ${r.dueInDays <= 0 ? 'today' : 'in ' + r.dueInDays + ' days'}</small><b>${esc(nm(r.receiver))} receives ${rupee(C.pot(s))}</b><div class="bar"><i style="width:${sum.confirmed.length / total * 100}%"></i></div><small>${rupee(sum.collected)} confirmed · ${sum.confirmed.length} of ${total} members</small></div>`;
+  h += swapsForMe.map(w => `<div class="note"><b>${esc(nm(w.from))} asks to swap turns with you</b><br><small>You would receive in month ${C.turnOf(s, w.from)} instead of month ${C.turnOf(s, w.to)}.</small><div class="row" style="margin-top:6px"><button class="primary" data-swap="${w.id}" data-ok="1">Agree</button><button data-swap="${w.id}" data-ok="">Decline</button></div></div>`).join('');
+  if (!iReceive && mine) h += mine.status === 'pending' ? `<button class="primary" id="payBtn" style="width:100%;margin-top:10px">Pay ${rupee(s.contribution)} to ${esc(nm(r.receiver))}</button>${mine.disputed ? '<small class="pill bad">' + esc(nm(r.receiver)) + ' says the last payment did not arrive</small>' : ''}` : `<div class="note">${mine.status === 'paid' ? 'You have paid. Waiting for ' + esc(nm(r.receiver)) + ' to confirm.' : 'Your payment this month is confirmed.'}</div>`;
+  if (iReceive) h += `<div class="note"><b>It is your month.</b> Confirm each payment when it reaches your account.</div>`;
+  h += `<div class="tabs" role="tablist">${[['round', 'This month'], ['turns', 'Turns'], ['standing', 'Standing'], ['rules', 'Rules']].map(([k, t]) => `<button role="tab" aria-selected="${tab === k}" data-tab="${k}">${t}</button>`).join('')}</div>`;
+  if (tab === 'round') {
+    h += Object.keys(r.pay).map(Number).map(id => { const p = r.pay[id], [cls, txt] = PILL[p.status];
+      const act = iReceive && p.status === 'paid' ? `<button class="primary" data-confirm="${id}">Confirm received</button><button data-dispute="${id}">Not received</button>` : `<span class="pill ${cls}">${txt}</span>`;
+      return `<div class="who"><span class="av">${esc(nm(id)[0])}</span><span><b>${esc(nm(id))}</b>${id === me ? ' (you)' : ''}${p.late ? '<br><small>paid late</small>' : ''}</span><span class="act">${act}</span></div>`; }).join('');
+    if (me === s.organiser && sum.pending.length) h += `<button id="remind" style="width:100%;margin-top:10px">Remind ${sum.pending.length} member${sum.pending.length > 1 ? 's' : ''} who have not paid</button>`;
+  }
+  if (tab === 'turns') h += s.order.map((id, i) => { const n = i + 1, state = n < s.current ? ['', 'Done'] : n === s.current ? ['acc', 'This month'] : ['', 'Month ' + n];
+    const ask = n > s.current && id !== me && C.canSwap(s, me, id) ? `<button data-ask="${id}">Ask to swap</button>` : '';
+    const waiting = s.swaps.some(w => w.status === 'pending' && w.from === me && w.to === id) ? '<span class="pill warn">Swap requested</span>' : '';
+    return `<div class="who"><span class="av">${n}</span><span><b>${esc(nm(id))}</b>${id === me ? ' (you)' : ''}</span><span class="act">${waiting || ask}<span class="pill ${state[0]}">${state[1]}</span></span></div>`; }).join('');
+  if (tab === 'standing') h += `<p class="muted">Someone who has already received the pot still owes the group their remaining months. This table makes that visible to everyone.</p><table><tr><th>Member</th><th class="num">Put in</th><th class="num">Received</th><th class="num">Ahead / behind</th><th class="num">On time</th></tr>${C.standing(s).map(x => `<tr><td>${esc(x.name)}${x.id === me ? ' (you)' : ''}</td><td class="num">${rupee(x.paidIn)}</td><td class="num">${rupee(x.received)}</td><td class="num"><span class="pill ${x.net > 0 ? 'warn' : ''}">${x.net > 0 ? '+' : ''}${rupee(x.net)}</span></td><td class="num">${x.onTime}%</td></tr>`).join('')}</table><small>Ahead (+) means received more than put in so far.</small>`;
+  if (tab === 'rules') h += `<p class="muted">Agreed by all members when the group was created.</p><ol>${C.RULES.map(x => `<li style="margin:6px 0">${esc(x)}</li>`).join('')}</ol>`;
+  $('app').innerHTML = h;
+  $('app').querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { tab = b.dataset.tab; track('open_tab', tab); render(); });
+  $('app').querySelectorAll('[data-confirm]').forEach(b => b.onclick = () => apply(C.confirm(s, +b.dataset.confirm), 'payment_confirmed', nm(+b.dataset.confirm), `Confirmed ${nm(+b.dataset.confirm)}’s payment`));
+  $('app').querySelectorAll('[data-dispute]').forEach(b => b.onclick = () => apply(C.dispute(s, +b.dataset.dispute), 'payment_disputed', nm(+b.dataset.dispute), `Marked as not received. ${nm(+b.dataset.dispute)} has been told.`));
+  $('app').querySelectorAll('[data-swap]').forEach(b => b.onclick = () => apply(C.answerSwap(s, +b.dataset.swap, !!b.dataset.ok), b.dataset.ok ? 'swap_approved' : 'swap_declined', '', b.dataset.ok ? 'Turns swapped. Everyone can see the new order.' : 'Swap declined'));
+  $('app').querySelectorAll('[data-ask]').forEach(b => b.onclick = () => { const to = +b.dataset.ask; track('swap_start', nm(to)); const sh = sheet(`<h2 style="margin-top:0">Swap turns with ${esc(nm(to))}?</h2><p>You would receive in month ${C.turnOf(s, to)} instead of month ${C.turnOf(s, me)}. ${esc(nm(to))} must agree. The whole group will see the change.</p><div class="row"><button class="primary" id="y">Send request</button><button id="n">Cancel</button></div>`); sh.querySelector('#y').onclick = () => apply(C.requestSwap(s, me, to), 'swap_requested', nm(to), `Request sent to ${nm(to)}`); sh.querySelector('#n').onclick = closeSheet; });
+  const pb = $('payBtn'); if (pb) pb.onclick = () => { track('pay_start'); const sh = sheet(`<h2 style="margin-top:0">Pay ${esc(nm(r.receiver))}</h2><p><b>${rupee(s.contribution)}</b> goes straight from your bank account to ${esc(nm(r.receiver))}’s by UPI. The app does not hold it.</p><small>In this prototype no money moves.</small><div class="row" style="margin-top:10px"><button class="primary" id="y">Pay ${rupee(s.contribution)}</button><button id="n">Cancel</button></div>`); sh.querySelector('#y').onclick = () => apply(C.pay(s, me), 'paid', nm(r.receiver), `Paid. ${nm(r.receiver)} will confirm.`); sh.querySelector('#n').onclick = closeSheet; };
+  const rb = $('remind'); if (rb) rb.onclick = () => { track('reminder_sent', sum.pending.map(nm).join(', ')); toast('Reminder sent to ' + sum.pending.map(nm).join(', ')); };
+  $('viewer').value = me;
+}
+$('viewer').innerHTML = s.members.map(m => `<option value="${m.id}">${esc(m.name)}${m.id === s.organiser ? ' (organiser)' : ''}</option>`).join('');
+$('viewer').onchange = e => { me = +e.target.value; tab = 'round'; closeSheet(); const t = $('toast'); if (t) t.remove(); render(); };
+
+// ---------- usability test ----------
+function showTask() { const t = C.TASKS[test.i]; me = t.as; tab = 'round'; closeSheet(); render(); $('taskBox').classList.remove('hidden'); $('taskBox').innerHTML = `<small>Task ${test.i + 1} of ${C.TASKS.length}</small><p style="font-weight:600">${esc(t.text)}</p><button class="ghost" id="giveUp">I can’t do this</button>`; $('giveUp').onclick = () => endTask(false); test.t0 = Date.now(); test.taps = 0; test.mark = events.length; }
+function checkTask() { if (!test || test.asking) return; if (C.TASKS[test.i].done(s, events.slice(test.mark))) endTask(true); }
+function endTask(ok) { test.asking = true; const rec = { participant: test.pid, task: C.TASKS[test.i].id, success: ok ? 1 : 0, seconds: +((Date.now() - test.t0) / 1000).toFixed(1), taps: test.taps };
+  $('taskBox').innerHTML = `<p style="font-weight:600">${ok ? 'Done.' : 'No problem.'} How easy was that?</p><div class="seg">${[1, 2, 3, 4, 5, 6, 7].map(n => `<button data-n="${n}">${n}</button>`).join('')}</div><small>1 = very hard, 7 = very easy</small>`;
+  $('taskBox').querySelectorAll('[data-n]').forEach(b => b.onclick = () => { rec.ease = +b.dataset.n; test.rows.push(rec); test.asking = false; if (++test.i < C.TASKS.length) showTask(); else finishTest(); }); }
+function finishTest() { const rows = test.rows; store.set('committee_tests', store.get('committee_tests', []).concat(rows)); $('taskBox').classList.add('hidden'); $('testDone').classList.remove('hidden');
+  $('testTable').innerHTML = '<tr><th>Task</th><th>Done</th><th class="num">Seconds</th><th class="num">Taps</th><th class="num">Ease</th></tr>' + rows.map(r => `<tr><td>${r.task}</td><td>${r.success ? 'yes' : 'no'}</td><td class="num">${r.seconds}</td><td class="num">${r.taps}</td><td class="num">${r.ease}</td></tr>`).join('');
+  $('dlTest').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['participant,task,success,seconds,taps,ease\n' + store.get('committee_tests', rows).map(r => [r.participant, r.task, r.success, r.seconds, r.taps, r.ease].join(',')).join('\n')], { type: 'text/csv' })); a.download = 'committee_test.csv'; document.body.appendChild(a); a.click(); a.remove(); }; test = null; }
+$('startTest').onclick = () => { s = C.seed(); events = []; $('testDone').classList.add('hidden'); test = { pid: $('pid').value.trim().replace(/[^A-Za-z0-9_-]/g, '') || 'P' + String(Date.now()).slice(-4), i: 0, rows: [], taps: 0, asking: false }; showTask(); };
+$('resetData').onclick = () => { s = C.seed(); events = []; $('log').textContent = ''; tab = 'round'; closeSheet(); render(); };
+render();
+</script>
+</body>
+</html>
