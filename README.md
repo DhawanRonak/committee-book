@@ -1,57 +1,56 @@
-# Committee Book
+﻿# Committee Book
 
-**A shared ledger for committee, kitty and bhishi savings circles.**
+A shared ledger for committee, kitty and bhishi savings circles. Members record contributions, receivers confirm receipts, and everyone can follow the rotation and balances.
 
-> Independent concept prototype for a product-management case study. Not affiliated with any company; all data is made up.
+## Features
 
-**Live demo:** _add your `pages.dev` link here after deploying_  
-**Product spec:** [PRD.md](PRD.md)
+- Create a committee with 3–20 members, a monthly contribution and a first due date.
+- Try an eight-member example without entering data.
+- Record an external payment, confirm receipt as the receiver, or dispute a missing payment. Full confirmation opens the next round automatically.
+- Follow the complete monthly timeline, request future-turn swaps and accept or decline as the other member. Conflicting requests are blocked and stale requests expire.
+- View confirmed contributions, receipts, net balances and on-time rates.
+- Switch member / organizer views, review rules and ledger activity, or reset the ledger.
+- Browser persistence and a skippable four-step first-visit tour, reopened with **How it works**.
+- Separate [research workspace](research.html) with five tasks, timing, interaction counts, ease ratings and CSV export. Research uses an isolated ledger.
 
-## The problem
+## Run and test
 
-Rotating savings circles run on a WhatsApp group, UPI screenshots and one organiser's notebook. Committee Book is a ledger, not a wallet: each member pays the month's receiver directly, the receiver confirms, and everyone sees the same picture of who has paid, whose turn is next, and who has received more than they have put in so far.
+No dependencies, framework or build step. Serve the folder:
 
-## What the prototype does
-
-- This month: who receives, what is confirmed, each member's status; pay, confirm, or mark not received.
-- Turns, with swaps that need the other member's consent and only for future turns.
-- Standing: put in, received, ahead or behind, and on-time rate for every member.
-- Organiser reminders, a rules page, and undo on every action.
-- Built-in usability test: five tasks, each as a different member, with success checked from the ledger and CSV export.
-
-## Run it
-
-No build step and no dependencies. Open `index.html` in a browser.
-
-Tests need Node 18 or later:
-
+```sh
+python -m http.server 8080
 ```
+
+Open `http://localhost:8080`. Research needs HTTP so its same-origin embedded ledger can communicate with the task runner.
+
+```sh
 node test/logic.test.mjs
+node --check app.js
+node --check research.js
 ```
 
-## Deploy (Cloudflare Pages, free)
+Tests cover payment transitions, receiver guards, creation validation, month-end dates, balances, complete cycles and swap consent/conflicts/expiry. Logic remains usable with `require('./logic.js')` in Node.
 
-1. In the [Cloudflare dashboard](https://dash.cloudflare.com), go to **Workers & Pages → Create → Pages → Connect to Git** and pick this repository.
-2. Build settings: framework preset **None**, build command `exit 0`, build output directory `/`. Save and deploy.
-3. You get a link like `committee-book.pages.dev`. Every push to `main` redeploys automatically.
+## Deploy on Cloudflare Pages
 
-Then paste the live link at the top of this README.
-
-## Files
-
-| File | What it is |
-|---|---|
-| `logic.js` | Rounds, payments, swaps and standing (pure functions; all people fictional) |
-| `index.html` | The prototype and usability test |
-| `test/logic.test.mjs` | Logic tests |
-| `PRD.md` | Product requirements: problem, hypotheses, requirements, metrics, evaluation plan, risks |
-| `base.css` | Shared styles |
+Connect this repository to Pages. Select no framework, set build command to `exit 0`, and output directory to `/` (the repository root). Deploy the static files. There are no environment variables or API keys to configure.
 
 ## What is real and what is not
 
-- People and amounts are made up, and no money moves.
-- **No legal review.** Rotating savings schemes can fall under India's chit-fund laws. The design avoids pooled money, interest, bidding and commission, but a real product would need legal sign-off first. See the PRD's risks section.
+The ledger rules, local persistence, role-specific actions, research task checks and CSV downloads work. Example names and transactions are fictional. No money moves through the app; a recorded payment is a member’s claim until its receiver confirms it.
 
-## Author
+This version stores data only in the current browser. It has no server synchronization, invitations, authentication, bank verification, notifications or access control. The view switch lets one browser explore or record each role; it does not prove identity. Research data and ledgers can be lost if browser storage is cleared; results can be exported on the research page. On-time rates include confirmed payments only.
 
-Ronak Dhawan · product management portfolio
+No AI endpoint is required or present. No legal review has been performed. The rules describe the ledger convention and do not establish legal compliance or member agreement. Product hypotheses and success metrics in [PRD.md](PRD.md) are proposals, not measured outcomes.
+
+## Files
+
+- `index.html`, `base.css`, `app.js`: product interface and tour.
+- `logic.js`: pure ledger functions.
+- `research.html`, `research.js`: isolated usability tasks and CSV export.
+- `test/logic.test.mjs`: Node assertions.
+- `PRD.md`: requirements, hypotheses and research plan.
+
+## Verification
+
+The Node logic suite and JavaScript syntax checks pass. Static files were served locally and checked over HTTP. Browser rendering and interactive checks at 375px and 1280px could not be completed in this environment: Playwright is not installed and the browser host is unavailable. Responsive styles target those widths, but visual verification remains outstanding.

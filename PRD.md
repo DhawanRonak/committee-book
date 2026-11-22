@@ -71,3 +71,13 @@ Five tasks, each as a different member: pay this month; confirm a payment as rec
 3. (Show the Standing tab.) How would your group react to seeing this?
 4. Would you use this if the app held the money? If it did not?
 5. What rule does your group have that this does not?
+
+## Implementation update — 22 November 2026
+
+The shipped static app supports local committee creation (3–20 members), an explicit example loader, four-step guided onboarding, browser persistence and reset. Monthly dates are based on the first due date, clamped at month end. The receiver does not contribute during their own round.
+
+Payment actions record an external payment claim; they do not initiate UPI transfers. Only the selected receiver can confirm or dispute in the interface. Organizer view selects the organizer identity; everyone can inspect the same ledger. View switching is a local interaction model with no authentication or shared server storage.
+
+Future-turn swaps require recipient consent. Requests involving either participant cannot overlap and expire when a turn becomes current. On-time percentages use confirmed contributions only. Completion retains the final round, timeline and standings.
+
+Research tasks and CSV export now live on `research.html`, using a separate example ledger and local results. Navigation tasks detect opening the relevant section, not comprehension. There is no messaging service, so simulated reminder delivery has been removed. Universal undo is no longer promised; creation/replacement and reset have explicit confirmation dialogs. Activity records payment and swap changes. This update supersedes the earlier prototype feature and reminder/undo claims above.
